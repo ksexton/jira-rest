@@ -389,13 +389,22 @@ If SYNCHRONOUS is true, the request is synchronous."
   (incf jira-request-level)
   (setf jira-revert-buffer (list 'jira-list-projects-and-filters instance)
         jira-instance instance)
-  (cl-labels ((got-server-info (info target-buffer)
-             (with-current-buffer target-buffer
+    (jira-get instance
+              (jira-server-info-endpoint)
+              'got-server-info
+              (list (current-buffer))))
+
+;;; BEGIN
+(defun got-server-info (info target-buffer)
+  "Got server info"
+  (with-current-buffer target-buffer
                (jira-get jira-instance
                          (jira-project-endpoint)
                          'got-projects
                          (list info target-buffer))))
-           (got-projects (projects info target-buffer)
+
+(defun got-projects (projects info target-buffer)
+  "Got projects"
              (let ((version-string (cdr (assq 'version info))))
                (if (jira-compare-versions (first (split-string version-string "-")) "5.0")
                    (got-filters nil projects info target-buffer)
@@ -404,7 +413,9 @@ If SYNCHRONOUS is true, the request is synchronous."
                              (jira-filter-endpoint "favourite")
                              'got-filters
                              (list projects info target-buffer))))))
-           (got-filters (filters projects info target-buffer)
+
+(defun got-filters (filters projects info target-buffer)
+  "Got filters"
              (let ((row-count 0)
                    avatar-requests)
                (with-jira-buffer target-buffer
@@ -458,11 +469,12 @@ If SYNCHRONOUS is true, the request is synchronous."
                     (when (and jira-zebra-stripe-rows (oddp row-count))
                       (overlay-put (make-overlay row-start (point)) 'face 'jira-zebra-stripe-face)))
                   (incf row-count))
-                (jira-load-images-async (nreverse avatar-requests))))))
-    (jira-get instance
-              (jira-server-info-endpoint)
-              'got-server-info
-              (list (current-buffer)))))
+                (jira-load-images-async (nreverse avatar-requests)))))
+
+;;; END
+
+
+
 
 (defun jira-load-images-async (requests)
   (cl-labels ((after-timeout (target-buffer requests request-level)
