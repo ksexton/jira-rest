@@ -221,6 +221,9 @@ See also `jira-issue-mode'.
 (defun jira-comment-endpoint (id-or-key)
   (format "/rest/api/latest/issue/%s/comment" id-or-key))
 
+(defun jira-worklog-endpoint (id-or-key)
+  (format "/rest/api/latest/issue/%s/worklog" id-or-key))
+
 (defun jira-assignable-user-endpoint (issue-key user-search)
   (format "/rest/api/latest/user/assignable/search?issueKey=%s&username=%s" issue-key user-search))
 
@@ -980,6 +983,23 @@ Ignore the arguments as they don't really make sense for us."
   (jira-post instance
              (jira-comment-endpoint key)
              `((body . ,comment))
+             (lambda (_ instance key)
+               (jira-show-issue instance key))
+             (list instance key)))
+
+
+(defun jira-worklog-issue (instance key comment time)
+  "Adds a new comment with text COMMENT to the issue with the specified KEY."
+  (interactive (list (or (jira-infer-instance) (jira-read-instance))
+                     (or (jira-infer-issue) (jira-read-issue))
+                     (jira-required-read "Comment")
+		     (jira-required-read "Time (ex: 3h 20m)")))
+
+  (jira-post instance
+             (jira-worklog-endpoint key)
+	     `((comment . ,comment)
+	       (timeSpent . ,time))
+
              (lambda (_ instance key)
                (jira-show-issue instance key))
              (list instance key)))
