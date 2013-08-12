@@ -47,7 +47,7 @@
 ;; controls which JIRA servers will be used, and the credentials for
 ;; accessing them.
 
-; (require 'cl)
+(require 'cl)
 (require 'cl-lib)
 (require 'json)
 (require 'mail-parse)
@@ -380,88 +380,6 @@ If SYNCHRONOUS is true, the request is synchronous."
           ((or (cdr left) (cdr right)) (jira-compare-versions (cdr left) (cdr right)))
           (t nil))))
 
-
-
-(defun got-server-info (info target-buffer)
-  "Got server info"
-  (with-current-buffer target-buffer
-    (jira-get jira-instance
-	      (jira-project-endpoint)
-	      'got-projects
-	      (list info target-buffer))))
-
-
-(defun got-projects (projects info target-buffer)
-  "Got projects"
-  (let ((version-string (cdr (assq 'version info))))
-    (if (jira-compare-versions (first (split-string version-string "-")) "5.0")
-	(got-filters nil projects info target-buffer)
-      (with-current-buffer target-buffer
-	(jira-get jira-instance
-		  (jira-filter-endpoint "favourite")
-		  'got-filters
-		  (list projects info target-buffer))))))
-
-
-
-(defun got-filters (filters projects info target-buffer)
-  "Got filters"
-  (let ((row-count 0)
-	avatar-requests)
-    (with-jira-buffer target-buffer
-		      (insert
-		       (propertize (concat (cdr (assoc 'serverTitle info)) "\n") 'face 'jira-title-face)
-		       "\n"
-		       (propertize "Projects:\n" 'face 'jira-heading-face)
-		       "\n")
-		      (dolist (project projects)
-			(let ((row-start (point)))
-			  (insert
-			   (propertize "  " 'invisible t)
-			   (format "%-12s" " "))
-			  (beginning-of-line)
-			  (when jira-display-images
-			    (push (list (cdr (assoc '16x16 (cdr (assoc 'avatarUrls project)))) (point)) avatar-requests))
-			  (forward-char 2)
-			  (insert-text-button (cdr (assoc 'key project))
-					      'action (lambda (button)
-							(jira-search-project-issues
-							 jira-instance
-							 (button-get button 'jira-project-key)
-							 ""))
-					      'follow-link 'mouse-face
-					      'jira-project-key (cdr (assoc 'key project)))
-			  (beginning-of-line)
-			  (forward-char 12)
-			  (insert (cdr (assoc 'name project)) "\n")
-			  (when (and jira-zebra-stripe-rows (oddp row-count))
-			    (overlay-put (make-overlay row-start (point)) 'face 'jira-zebra-stripe-face)))
-			(incf row-count))
-
-		      (insert "\n\n")
-		      (setf row-count 0)
-		      (insert (propertize "Filters:\n" 'face 'jira-heading-face) "\n")
-
-		      (dolist (filter filters)
-			(let ((row-start (point)))
-			  (insert (format "%-8s" " "))
-			  (beginning-of-line)
-			  (insert-text-button (cdr (assoc 'id filter))
-					      'action (lambda (button)
-							(jira-list-issues
-							 jira-instance
-							 (button-get button 'jira-filter-key)))
-					      'follow-link 'mouse-face
-					      'jira-filter-key (cdr (assoc 'id filter)))
-			  (beginning-of-line)
-			  (forward-char 8)
-			  (insert (format " %s\n" (cdr (assoc 'name filter))))
-			  (when (and jira-zebra-stripe-rows (oddp row-count))
-			    (overlay-put (make-overlay row-start (point)) 'face 'jira-zebra-stripe-face)))
-			(incf row-count))
-		      (jira-load-images-async (nreverse avatar-requests)))))
-
-
 (defun jira-list-projects-and-filters (instance)
   "Lists the projects and favourited filters of INSTANCE."
   (interactive (list (or (jira-infer-instance) (jira-read-instance))))
@@ -471,56 +389,113 @@ If SYNCHRONOUS is true, the request is synchronous."
   (incf jira-request-level)
   (setf jira-revert-buffer (list 'jira-list-projects-and-filters instance)
         jira-instance instance)
+  (cl-labels ((got-server-info (info target-buffer)
+             (with-current-buffer target-buffer
+               (jira-get jira-instance
+                         (jira-project-endpoint)
+                         'got-projects
+                         (list info target-buffer))))
+           (got-projects (projects info target-buffer)
+             (let ((version-string (cdr (assq 'version info))))
+               (if (jira-compare-versions (first (split-string version-string "-")) "5.0")
+                   (got-filters nil projects info target-buffer)
+                 (with-current-buffer target-buffer
+                   (jira-get jira-instance
+                             (jira-filter-endpoint "favourite")
+                             'got-filters
+                             (list projects info target-buffer))))))
+           (got-filters (filters projects info target-buffer)
+             (let ((row-count 0)
+                   avatar-requests)
+               (with-jira-buffer target-buffer
+                (insert
+                 (propertize (concat (cdr (assoc 'serverTitle info)) "\n") 'face 'jira-title-face)
+                 "\n"
+                 (propertize "Projects:\n" 'face 'jira-heading-face)
+                 "\n")
+                (dolist (project projects)
+                  (let ((row-start (point)))
+                    (insert
+                     (propertize "  " 'invisible t)
+                     (format "%-12s" " "))
+                    (beginning-of-line)
+                    (when jira-display-images
+                      (push (list (cdr (assoc '16x16 (cdr (assoc 'avatarUrls project)))) (point)) avatar-requests))
+                    (forward-char 2)
+                    (insert-text-button (cdr (assoc 'key project))
+                                        'action (lambda (button)
+                                                  (jira-search-project-issues
+                                                   jira-instance
+                                                   (button-get button 'jira-project-key)
+                                                   ""))
+                                        'follow-link 'mouse-face
+                                        'jira-project-key (cdr (assoc 'key project)))
+                    (beginning-of-line)
+                    (forward-char 12)
+                    (insert (cdr (assoc 'name project)) "\n")
+                    (when (and jira-zebra-stripe-rows (oddp row-count))
+                      (overlay-put (make-overlay row-start (point)) 'face 'jira-zebra-stripe-face)))
+                  (incf row-count))
 
-  (jira-get instance
-	    (jira-server-info-endpoint)
-	    'got-server-info
-	    (list (current-buffer))))
+                (insert "\n\n")
+                (setf row-count 0)
+                (insert (propertize "Filters:\n" 'face 'jira-heading-face) "\n")
 
-
-(defun after-timeout (target-buffer requests request-level)
-  "After timeout"
-  (with-current-buffer target-buffer
-    (dolist (request requests)
-      (destructuring-bind (url . insertion-points) request
-	(let ((url-request-extra-headers `(("Authorization" . ,(jira-auth-token jira-instance)))))
-	  (jira-retrieve-async url 'got-avatar (list target-buffer insertion-points request-level)))))))
-
-
-
-(defun got-avatar (status target-buffer insertion-points request-level)
-  "Got avatar"
-  (let ((buffer (current-buffer)))
-    (unwind-protect
-	(when (and (null (plist-get status :error))
-		   (buffer-live-p target-buffer))
-	  (jira-skip-header)
-	  (let ((image (condition-case _ (create-image (buffer-substring (point) (point-max)) nil t)
-			 ((error nil)))))
-	    (when image
-	      (destructuring-bind (_ . props) image
-		(with-current-buffer target-buffer
-		  (when (eql request-level jira-request-level)
-		    (let ((buffer-read-only nil)
-			  (inhibit-point-motion-hooks t))
-		      (dolist (insertion-point insertion-points)
-			(goto-char insertion-point)
-			(remove-text-properties insertion-point (+ insertion-point 2)
-						'(invisible nil))
-			(put-text-property insertion-point (1+ insertion-point)
-					   'display `(image :ascent center ,@props))
-			(end-of-line)
-			;; XXX This should be smarter. Not decrease the line height if it's
-			;; already set larger, and to not have a hardcoded height
-			(add-text-properties (point) (1+ (point)) '(line-height 17))))))))))
-      (kill-buffer buffer))))
-
-
-;;end
-
-
+                (dolist (filter filters)
+                  (let ((row-start (point)))
+                    (insert (format "%-8s" " "))
+                    (beginning-of-line)
+                    (insert-text-button (cdr (assoc 'id filter))
+                                        'action (lambda (button)
+                                                  (jira-list-issues
+                                                   jira-instance
+                                                   (button-get button 'jira-filter-key)))
+                                        'follow-link 'mouse-face
+                                        'jira-filter-key (cdr (assoc 'id filter)))
+                    (beginning-of-line)
+                    (forward-char 8)
+                    (insert (format " %s\n" (cdr (assoc 'name filter))))
+                    (when (and jira-zebra-stripe-rows (oddp row-count))
+                      (overlay-put (make-overlay row-start (point)) 'face 'jira-zebra-stripe-face)))
+                  (incf row-count))
+                (jira-load-images-async (nreverse avatar-requests))))))
+    (jira-get instance
+              (jira-server-info-endpoint)
+              'got-server-info
+              (list (current-buffer)))))
 
 (defun jira-load-images-async (requests)
+  (cl-labels ((after-timeout (target-buffer requests request-level)
+             (with-current-buffer target-buffer
+               (dolist (request requests)
+                 (destructuring-bind (url . insertion-points) request
+                   (let ((url-request-extra-headers `(("Authorization" . ,(jira-auth-token jira-instance)))))
+                     (jira-retrieve-async url 'got-avatar (list target-buffer insertion-points request-level)))))))
+           (got-avatar (status target-buffer insertion-points request-level)
+             (let ((buffer (current-buffer)))
+               (unwind-protect
+                   (when (and (null (plist-get status :error))
+                              (buffer-live-p target-buffer))
+                     (jira-skip-header)
+                     (let ((image (condition-case _ (create-image (buffer-substring (point) (point-max)) nil t)
+                                    ((error nil)))))
+                       (when image
+                         (destructuring-bind (_ . props) image
+                           (with-current-buffer target-buffer
+                             (when (eql request-level jira-request-level)
+                               (let ((buffer-read-only nil)
+                                     (inhibit-point-motion-hooks t))
+                                 (dolist (insertion-point insertion-points)
+                                   (goto-char insertion-point)
+                                   (remove-text-properties insertion-point (+ insertion-point 2)
+                                                           '(invisible nil))
+                                   (put-text-property insertion-point (1+ insertion-point)
+                                                      'display `(image :ascent center ,@props))
+                                   (end-of-line)
+                                   ;; XXX This should be smarter. Not decrease the line height if it's
+                                   ;; already set larger, and to not have a hardcoded height
+                                   (add-text-properties (point) (1+ (point)) '(line-height 17))))))))))
+                 (kill-buffer buffer)))))
     (let (optimised)
       (dolist (request requests)
         (destructuring-bind (url position) request
@@ -528,7 +503,7 @@ If SYNCHRONOUS is true, the request is synchronous."
             (if record
                 (push position (cdr record))
               (push request optimised)))))
-      (run-at-time 0 nil 'after-timeout (current-buffer) optimised jira-request-level)))
+      (run-at-time 0 nil 'after-timeout (current-buffer) optimised jira-request-level))))
 
 (defmacro with-jira-buffer (target-buffer &rest body)
   `(with-current-buffer target-buffer
@@ -715,38 +690,6 @@ Summary, description, and comment fields are searched."
       (incf row-count))
     (jira-load-images-async (nreverse icon-requests))))
 
-
-
-;;; BEGIN
-
-(defun got-filter  (filter filter-id instance target-buffer)
-  "Got filter"
-  (jira-post instance
-	     (jira-search-endpoint)
-	     `((jql . ,(format "filter = %s" filter-id)))
-	     'got-search-results
-	     (list filter filter-id instance target-buffer)))
-
-(defun got-search-results (search-results filter filter-id instance target-buffer)
-             (let ((issue-list (cdr (assoc 'issues search-results))))
-               (jira-enrich-issues issue-list
-                                   instance
-                                   'got-enriched-results
-                                   (list issue-list filter filter-id target-buffer))))
-
-(defun got-enriched-results (issue-list filter filter-id target-buffer)
-             (with-jira-buffer target-buffer
-               (insert (propertize (format "Filter: %s (%s)\n"
-                                           (cdr (assoc 'name filter))
-                                           filter-id)
-                                   'face 'jira-title-face)
-                       "\n")
-               (when (cdr (assoc 'description filter))
-                 (insert (propertize "Description\n" 'face 'jira-heading-face)
-                         (cdr (assoc 'description filter)) "\n\n"))
-               (jira-display-issues issue-list)))
-
-
 (defun jira-list-issues (instance filter-id)
   "Displays a list of issues matching the filter specified by FILTER-ID on INSTANCE."
   (interactive (list (or (jira-infer-instance) (jira-read-instance))
@@ -756,7 +699,29 @@ Summary, description, and comment fields are searched."
   (unless (eq major-mode 'jira-mode)
     (jira-mode))
   (incf jira-request-level)
-
+  (cl-labels ((got-filter (filter filter-id instance target-buffer)
+             (jira-post instance
+                        (jira-search-endpoint)
+                        `((jql . ,(format "filter = %s" filter-id)))
+                        'got-search-results
+                        (list filter filter-id instance target-buffer)))
+           (got-search-results (search-results filter filter-id instance target-buffer)
+             (let ((issue-list (cdr (assoc 'issues search-results))))
+               (jira-enrich-issues issue-list
+                                   instance
+                                   'got-enriched-results
+                                   (list issue-list filter filter-id target-buffer))))
+           (got-enriched-results (issue-list filter filter-id target-buffer)
+             (with-jira-buffer target-buffer
+               (insert (propertize (format "Filter: %s (%s)\n"
+                                           (cdr (assoc 'name filter))
+                                           filter-id)
+                                   'face 'jira-title-face)
+                       "\n")
+               (when (cdr (assoc 'description filter))
+                 (insert (propertize "Description\n" 'face 'jira-heading-face)
+                         (cdr (assoc 'description filter)) "\n\n"))
+               (jira-display-issues issue-list))))
     ;; TODO: Setting jira-instance should be done as part of the end of the
     ;;       chain of requests rather than their beginning.
     (setf jira-instance instance
@@ -766,7 +731,7 @@ Summary, description, and comment fields are searched."
                 (jira-filter-endpoint filter-id)
                 'got-filter
                 (list filter-id instance (current-buffer))))
-    (jira-revert-buffer))
+    (jira-revert-buffer)))
 
 (defun jira-format-date (date)
   (let ((r (rx string-start
@@ -1050,46 +1015,6 @@ This function performs a synchronous request."
                   result)))
             nil 'synchronous))
 
-
-;;; BEGIN
-
-(defun got-issue-transitions (transitions instance key transition-name resolution-name)
-  "Got issue transitions"
-             (let* ((transition (find transition-name (cdr (assoc 'transitions transitions))
-                                      :test 'string=
-                                      :key (lambda (transition) (cdr (assoc 'name transition)))))
-                    (transition-id (cdr (assoc 'id transition))))
-               (if resolution-name
-                   (jira-get instance
-                             (jira-resolutions-endpoint)
-                             'got-resolutions
-                             (list instance key transition-id resolution-name))
-                 (send-post instance key `((transition . ((id . ,transition-id))))))))
-
-
-(defun got-resolutions (resolutions instance key transition-id resolution-name)
-  "Got issue resolutions"
-             (let* ((resolution (find resolution-name resolutions
-                                      :test 'string=
-                                      :key (lambda (transition) (cdr (assoc 'name transition)))))
-                    (resolution-id (cdr (assoc 'id resolution))))
-               (send-post instance key `((transition . ((id . ,transition-id)))
-                                         (fields . ((resolution . ((id . ,resolution-id)))))))))
-
-(defun send-post (instance key data)
-  "Send post"
-             (jira-post instance
-                        (jira-issue-transitions-endpoint key)
-                        data
-                        'got-post-response
-                        (list instance key)))
-
-(defun got-post-response (_ instance key)
-  "Got post response"
-             (jira-show-issue instance key))
-
-;;; END
-
 ;; TODO this and functions like this should accept transition names and transition ids
 (defun jira-update-issue-status (instance key transition-name &optional resolution-name)
   "Changes the status of the issue with key KEY via the transition named by TRANSITION-NAME.
@@ -1141,11 +1066,36 @@ Issue' transitions."
                            (jira-required-read "Resolution" resolution-completer)
                          nil)))
                  (list instance key transition-name resolution-name)))
-
+  (cl-labels ((got-issue-transitions (transitions instance key transition-name resolution-name)
+             (let* ((transition (find transition-name (cdr (assoc 'transitions transitions))
+                                      :test 'string=
+                                      :key (lambda (transition) (cdr (assoc 'name transition)))))
+                    (transition-id (cdr (assoc 'id transition))))
+               (if resolution-name
+                   (jira-get instance
+                             (jira-resolutions-endpoint)
+                             'got-resolutions
+                             (list instance key transition-id resolution-name))
+                 (send-post instance key `((transition . ((id . ,transition-id))))))))
+           (got-resolutions (resolutions instance key transition-id resolution-name)
+             (let* ((resolution (find resolution-name resolutions
+                                      :test 'string=
+                                      :key (lambda (transition) (cdr (assoc 'name transition)))))
+                    (resolution-id (cdr (assoc 'id resolution))))
+               (send-post instance key `((transition . ((id . ,transition-id)))
+                                         (fields . ((resolution . ((id . ,resolution-id)))))))))
+           (send-post (instance key data)
+             (jira-post instance
+                        (jira-issue-transitions-endpoint key)
+                        data
+                        'got-post-response
+                        (list instance key)))
+           (got-post-response (_ instance key)
+             (jira-show-issue instance key)))
     (jira-get instance
               (jira-issue-transitions-endpoint key)
               'got-issue-transitions
-              (list instance key transition-name resolution-name)))
+              (list instance key transition-name resolution-name))))
 
 (defun jira-watch-issue (instance key &optional stop-watching)
   "Starts watching the issue specified by KEY.
