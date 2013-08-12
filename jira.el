@@ -702,28 +702,22 @@ Summary, description, and comment fields are searched."
       (incf row-count))
     (jira-load-images-async (nreverse icon-requests))))
 
-(defun jira-list-issues (instance filter-id)
-  "Displays a list of issues matching the filter specified by FILTER-ID on INSTANCE."
-  (interactive (list (or (jira-infer-instance) (jira-read-instance))
-                     (read-number "Filter ID: ")))
-  ;; TODO should do a completing read for the filter id
-  (switch-to-buffer (format "*%s Search*" (jira-instance-name instance)))
-  (unless (eq major-mode 'jira-mode)
-    (jira-mode))
-  (incf jira-request-level)
-  (cl-labels ((got-filter (filter filter-id instance target-buffer)
+;;; BEGIN
+(defun got-filter (filter filter-id instance target-buffer)
              (jira-post instance
                         (jira-search-endpoint)
                         `((jql . ,(format "filter = %s" filter-id)))
                         'got-search-results
                         (list filter filter-id instance target-buffer)))
-           (got-search-results (search-results filter filter-id instance target-buffer)
+
+(defun got-search-results (search-results filter filter-id instance target-buffer)
              (let ((issue-list (cdr (assoc 'issues search-results))))
                (jira-enrich-issues issue-list
                                    instance
                                    'got-enriched-results
                                    (list issue-list filter filter-id target-buffer))))
-           (got-enriched-results (issue-list filter filter-id target-buffer)
+
+(defun got-enriched-results (issue-list filter filter-id target-buffer)
              (with-jira-buffer target-buffer
                (insert (propertize (format "Filter: %s (%s)\n"
                                            (cdr (assoc 'name filter))
@@ -733,7 +727,21 @@ Summary, description, and comment fields are searched."
                (when (cdr (assoc 'description filter))
                  (insert (propertize "Description\n" 'face 'jira-heading-face)
                          (cdr (assoc 'description filter)) "\n\n"))
-               (jira-display-issues issue-list))))
+               (jira-display-issues issue-list)))
+
+;;; END
+
+
+
+(defun jira-list-issues (instance filter-id)
+  "Displays a list of issues matching the filter specified by FILTER-ID on INSTANCE."
+  (interactive (list (or (jira-infer-instance) (jira-read-instance))
+                     (read-number "Filter ID: ")))
+  ;; TODO should do a completing read for the filter id
+  (switch-to-buffer (format "*%s Search*" (jira-instance-name instance)))
+  (unless (eq major-mode 'jira-mode)
+    (jira-mode))
+  (incf jira-request-level)
     ;; TODO: Setting jira-instance should be done as part of the end of the
     ;;       chain of requests rather than their beginning.
     (setf jira-instance instance
@@ -743,7 +751,7 @@ Summary, description, and comment fields are searched."
                 (jira-filter-endpoint filter-id)
                 'got-filter
                 (list filter-id instance (current-buffer))))
-    (jira-revert-buffer)))
+    (jira-revert-buffer))
 
 (defun jira-format-date (date)
   (let ((r (rx string-start
