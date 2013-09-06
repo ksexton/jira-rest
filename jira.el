@@ -1169,4 +1169,4 @@ Interactively, uses the current region."
 
 ;;; Done
 
-(provide 'jira)
+(provide 'jira-rest)
